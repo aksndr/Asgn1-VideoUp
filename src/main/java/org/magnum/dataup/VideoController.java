@@ -18,53 +18,41 @@
 package org.magnum.dataup;
 
 import org.magnum.dataup.model.Video;
+import org.magnum.dataup.model.VideoStatus;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import retrofit.http.Multipart;
+import retrofit.http.POST;
+import retrofit.http.Part;
+import retrofit.mime.TypedFile;
 
+import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.Collection;
-import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Controller
 public class VideoController {
 
-	/**
-	 * You will need to create one or more Spring controllers to fulfill the
-	 * requirements of the assignment. If you use this file, please rename it
-	 * to something other than "AnEmptyController"
-	 * 
-	 *
-     *	 ________  ________  ________  ________          ___       ___  ___  ________  ___  __
-     *	|\   ____\|\   __  \|\   __  \|\   ___ \        |\  \     |\  \|\  \|\   ____\|\  \|\  \
-     *	\ \  \___|\ \  \|\  \ \  \|\  \ \  \_|\ \       \ \  \    \ \  \\\  \ \  \___|\ \  \/  /|_
-     *	 \ \  \  __\ \  \\\  \ \  \\\  \ \  \ \\ \       \ \  \    \ \  \\\  \ \  \    \ \   ___  \
-     *	  \ \  \|\  \ \  \\\  \ \  \\\  \ \  \_\\ \       \ \  \____\ \  \\\  \ \  \____\ \  \\ \  \
-     *	   \ \_______\ \_______\ \_______\ \_______\       \ \_______\ \_______\ \_______\ \__\\ \__\
-     *	    \|_______|\|_______|\|_______|\|_______|        \|_______|\|_______|\|_______|\|__| \|__|
-     *
-	 * 
-	 */
+    private Collection<Video> videoList;
+    private AtomicLong counter;
+    private VideoFileManager videoFileManager;
+
+    @PostConstruct
+    public void init() throws IOException {
+        videoList = new CopyOnWriteArrayList<Video>();
+        counter = new AtomicLong(10);
+        videoFileManager = VideoFileManager.get();
+//        putTestVideo();
+    }
 
 
-    @RequestMapping(VideoSvcApi.VIDEO_SVC_PATH)
+    @RequestMapping(value = VideoSvcApi.VIDEO_SVC_PATH, method = RequestMethod.GET)
     @ResponseBody
-    public  Collection<Video> getVideoList(
-            HttpServletResponse response) {
-        Collection<Video> videoList = new CopyOnWriteArrayList<Video>();
-
-        Video video = Video.create().withContentType("video/mp4")
-                .withDuration(123).withSubject(UUID.randomUUID().toString())
-                .withTitle(UUID.randomUUID().toString()).build();
-        video.setId(12341234L);
-
-        Video video2 = Video.create().withContentType("video/mp4")
-                .withDuration(1223).withSubject(UUID.randomUUID().toString())
-                .withTitle(UUID.randomUUID().toString()).build();
-        video.setId(123433334L);
-        videoList.add(video);
-        videoList.add(video2);
+    public Collection<Video> getVideoList(HttpServletResponse response) {
         // Maybe you want to set the status code with the response
         // or write some binary data to an OutputStream obtained from
         // the HttpServletResponse object
@@ -73,5 +61,38 @@ public class VideoController {
         return videoList;
     }
 
+    @RequestMapping(value = VideoSvcApi.VIDEO_SVC_PATH, method = RequestMethod.POST)
+    @ResponseBody
+    public Video addVideo(@RequestBody Video v) {
+        Long id = counter.incrementAndGet();
+        v.setId(id);
+        v.setDataUrl(getVideoUrl(id));
+        videoList.add(v);
+        return v;
+    }
+
+
+    @Multipart
+    @POST(VideoSvcApi.VIDEO_DATA_PATH)
+    public VideoStatus setVideoData(@PathVariable("id") Long id,
+                                    @Part(VideoSvcApi.DATA_PARAMETER) TypedFile videoData) {
+
+//        videoList.contains()
+
+
+        VideoStatus videoStatus = new VideoStatus(VideoStatus.VideoState.PROCESSING);
+
+
+        return videoStatus;
+    }
+
+
+    private String getVideoUrl(Long id) {
+        return String.format("http://localhost:8080/video/%s/data", id.toString());
+    }
+
+    private void saveSomeVideo(Video v, MultipartFile videoData) throws IOException {
+        videoFileManager.saveVideoData(v, videoData.getInputStream());
+    }
 
 }
