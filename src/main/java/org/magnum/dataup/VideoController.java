@@ -21,13 +21,13 @@ import org.magnum.dataup.model.Video;
 import org.magnum.dataup.model.VideoStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
-import retrofit.http.Multipart;
-import retrofit.http.POST;
-import retrofit.http.Part;
-import retrofit.mime.TypedFile;
+import retrofit.http.Streaming;
 
 import javax.annotation.PostConstruct;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collection;
@@ -40,6 +40,7 @@ public class VideoController {
     private Collection<Video> videoList;
     private AtomicLong counter;
     private VideoFileManager videoFileManager;
+    private static final int DEFAULT_BUFFER_SIZE = 10240;
 
     @PostConstruct
     public void init() throws IOException {
@@ -71,28 +72,83 @@ public class VideoController {
         return v;
     }
 
-
-    @Multipart
-    @POST(VideoSvcApi.VIDEO_DATA_PATH)
-    public VideoStatus setVideoData(@PathVariable("id") Long id,
-                                    @Part(VideoSvcApi.DATA_PARAMETER) TypedFile videoData) {
-
-//        videoList.contains()
-
+    @RequestMapping(value = VideoSvcApi.VIDEO_DATA_PATH, method = RequestMethod.POST,
+            consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE
+    )
+    @ResponseBody
+    public VideoStatus setVideoData(@PathVariable(VideoSvcApi.ID_PARAMETER) Long id,
+                                    @RequestPart(VideoSvcApi.DATA_PARAMETER) MultipartFile data,
+                                    HttpServletResponse response) {
 
         VideoStatus videoStatus = new VideoStatus(VideoStatus.VideoState.PROCESSING);
 
-
+        try {
+            Video video = getVideoById(id);
+            if (video != null) {
+                saveVideo(video, data);
+                videoStatus = new VideoStatus(VideoStatus.VideoState.READY);
+            } else {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return videoStatus;
     }
 
-
-    private String getVideoUrl(Long id) {
-        return String.format("http://localhost:8080/video/%s/data", id.toString());
+    @Streaming
+    @RequestMapping(value = VideoSvcApi.VIDEO_DATA_PATH, method = RequestMethod.GET)
+    public HttpServletResponse getData(@PathVariable(VideoSvcApi.ID_PARAMETER) long id,
+                                       HttpServletResponse response) {
+        Video video = getVideoById(id);
+        if (video == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+        } else {
+            if (response.getContentType() == null) {
+                response.setContentType("video/mp4");
+            }
+//            BufferedOutputStream output = null;
+            try {
+                videoFileManager.copyVideoData(video, response.getOutputStream());
+//                output = new BufferedOutputStream(response.getOutputStream(),DEFAULT_BUFFER_SIZE);
+            } catch (Exception e) {
+                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            }
+//            finally {
+//                try {
+//                    if (output != null) output.close();
+//                } catch (IOException e) {
+//                    //
+//                }
+//
+//            }
+        }
+        return response;
     }
 
-    private void saveSomeVideo(Video v, MultipartFile videoData) throws IOException {
+
+    private Video getVideoById(Long id) {
+        for (Video v : videoList) {
+            if (v.getId() == id) return v;
+        }
+        return null;
+    }
+
+    private String getVideoUrl(Long id) {
+        return getUrlBaseForLocalServer() + String.format("/video/%s/data", id.toString());
+    }
+
+    public void saveVideo(Video v, MultipartFile videoData) throws IOException {
         videoFileManager.saveVideoData(v, videoData.getInputStream());
     }
 
+    private String getUrlBaseForLocalServer() {
+        HttpServletRequest request =
+                ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        String base =
+                "http://" + request.getServerName()
+                        + ((request.getServerPort() != 80) ? ":" + request.getServerPort() : "");
+        return base;
+    }
 }
