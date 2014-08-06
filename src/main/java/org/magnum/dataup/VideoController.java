@@ -57,7 +57,7 @@ public class VideoController {
         // Maybe you want to set the status code with the response
         // or write some binary data to an OutputStream obtained from
         // the HttpServletResponse object
-        response.setContentType("application/json;charset=UTF-8");
+        response.setContentType(org.springframework.http.MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_OK);
         return videoList;
     }
@@ -108,25 +108,14 @@ public class VideoController {
             if (response.getContentType() == null) {
                 response.setContentType("video/mp4");
             }
-//            BufferedOutputStream output = null;
             try {
                 videoFileManager.copyVideoData(video, response.getOutputStream());
-//                output = new BufferedOutputStream(response.getOutputStream(),DEFAULT_BUFFER_SIZE);
             } catch (Exception e) {
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             }
-//            finally {
-//                try {
-//                    if (output != null) output.close();
-//                } catch (IOException e) {
-//                    //
-//                }
-//
-//            }
         }
         return response;
     }
-
 
     private Video getVideoById(Long id) {
         for (Video v : videoList) {
@@ -144,11 +133,7 @@ public class VideoController {
     }
 
     private String getUrlBaseForLocalServer() {
-        HttpServletRequest request =
-                ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-        String base =
-                "http://" + request.getServerName()
-                        + ((request.getServerPort() != 80) ? ":" + request.getServerPort() : "");
-        return base;
+        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        return "http://" + request.getServerName() + ((request.getServerPort() != 80) ? ":" + request.getServerPort() : "");
     }
 }
